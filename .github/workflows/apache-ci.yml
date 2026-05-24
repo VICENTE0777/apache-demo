@@ -1,8 +1,6 @@
 name: Apache CI/CD
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -10,40 +8,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout código
-      uses: actions/checkout@v3
+      - name: Checkout código
+        uses: actions/checkout@v3
 
-    - name: Login en Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-    - name: Build y Push de imagen Apache
-      run: |
-        docker build -t vicente011/apache-demo:1.0 .
-        docker push vicente011/apache-demo:1.0
+      - name: Login en Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Conexión a EC2 y despliegue en K3s
-      uses: appleboy/ssh-action@v0.1.10
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ec2-user
-        key: ${{ secrets.EA2_SSH_PRIVATE_KEY }}
-        script: |
-          cd /home/ec2-user/apache-demo
-          echo "Aplicando manifiestos en K3s..."
-          sudo kubectl apply -f k8s/deployment.yaml
-          sudo kubectl apply -f k8s/service.yaml
-          echo "Estado de pods y servicios:"
-          sudo kubectl get pods -A
-          sudo kubectl get svc -A
+      - name: Construir y subir imagen Apache
+        run: |
+          docker build -t vicente011/apache-demo:1.0 .
+          docker push vicente011/apache-demo:1.0
 
-    - name: Verificación automática con curl
-      uses: appleboy/ssh-action@v0.1.10
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ec2-user
-        key: ${{ secrets.EA2_SSH_PRIVATE_KEY }}
-        script: |
-          curl -s http://$HOST_PUBLICO:30100 | head -n 10
+      - name: Conectar a EC2 y aplicar manifiestos
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EA2_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /home/ec2-user/apache-demo
+            echo "Aplicando manifiestos en K3s..."
+            sudo kubectl apply -f k8s/deployment.yaml
+            sudo kubectl apply -f k8s/service.yaml
+            echo "Estado de pods y servicios:"
+            sudo kubectl get pods -A
+            sudo kubectl get svc -A
